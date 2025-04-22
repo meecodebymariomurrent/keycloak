@@ -20,20 +20,19 @@ import {
   SplitItem,
   Title,
 } from "@patternfly/react-core";
+import { BellIcon } from "@patternfly/react-icons";
 import { useMemo, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../admin-client";
-import { UserSelect } from "../../components/users/UserSelect";
-import { ClientSelect } from "../../components/client/ClientSelect";
-import { GroupSelect } from "../resource-types/GroupSelect";
 import { FormAccess } from "../../components/form/FormAccess";
+import { UserSelect } from "../../components/users/UserSelect";
 import { useAccess } from "../../context/access/Access";
-import { ForbiddenSection } from "../../ForbiddenSection";
-import { BellIcon } from "@patternfly/react-icons";
 import { useRealm } from "../../context/realm-context/RealmContext";
-import { PermissionEvaluationResult } from "./PermissionEvaluationResult";
+import { ForbiddenSection } from "../../ForbiddenSection";
 import useSortedResourceTypes from "../../utils/useSortedResourceTypes";
+import { PermissionEvaluationResult } from "./PermissionEvaluationResult";
+import { COMPONENTS } from "../resource-types/ResourceType";
 
 interface EvaluateFormInputs
   extends Omit<ResourceEvaluation, "context" | "resources"> {
@@ -42,6 +41,7 @@ interface EvaluateFormInputs
   clients: string[];
   groups: string[];
   users: string[];
+  roles: string[];
   resourceType?: string;
 }
 
@@ -49,12 +49,6 @@ type Props = {
   client: ClientRepresentation;
   save: () => void;
 } & EvaluationResultRepresentation;
-
-const COMPONENTS: Record<string, React.ElementType> = {
-  users: UserSelect,
-  clients: ClientSelect,
-  groups: GroupSelect,
-};
 
 export const PermissionsEvaluationTab = (props: Props) => {
   const { hasAccess } = useAccess();
@@ -114,6 +108,8 @@ const PermissionEvaluateContent = ({ client }: Props) => {
           return formValues.users?.[0];
         case "Clients":
           return formValues.clients?.[0];
+        case "Roles":
+          return formValues.roles?.[0];
         default:
           return undefined;
       }
@@ -124,6 +120,7 @@ const PermissionEvaluateContent = ({ client }: Props) => {
     const resEval: ResourceEvaluation = {
       roleIds: formValues.roleIds ?? [],
       userId: formValues.user![0],
+      resourceType: formValues.resourceType,
       resources: [
         {
           name: resourceName,
@@ -199,6 +196,7 @@ const PermissionEvaluateContent = ({ client }: Props) => {
                       defaultValue={[]}
                       variant="typeahead"
                       isRequired
+                      isRadio
                     />
                   )}
                   <SelectControl

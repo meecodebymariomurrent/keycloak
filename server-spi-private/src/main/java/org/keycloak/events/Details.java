@@ -40,6 +40,7 @@ public interface Details {
     String AUTH_METHOD = "auth_method";
     String IDENTITY_PROVIDER = "identity_provider";
     String IDENTITY_PROVIDER_USERNAME = "identity_provider_identity";
+    String IDENTITY_PROVIDER_BROKER_SESSION_ID = "identity_provider_broker_session_id";
     String REGISTER_METHOD = "register_method";
     String USERNAME = "username";
     String FIRST_NAME = "first_name";
@@ -50,6 +51,8 @@ public interface Details {
     String UPDATED_LAST_NAME = PREF_UPDATED + "last_name";
     String REMEMBER_ME = "remember_me";
     String TOKEN_ID = "token_id";
+    String TOKEN_TYPE = "token_type";
+    String TOKEN_ISSUED_FOR = "token_issued_for";
     String ORG_ID = "org_id";
     String REFRESH_TOKEN_ID = "refresh_token_id";
     String REFRESH_TOKEN_TYPE = "refresh_token_type";
@@ -105,4 +108,7 @@ public interface Details {
     String LOGOUT_TRIGGERED_BY_REQUIRED_ACTION = "logout_triggered_by_required_action";
     String ACCESS_TOKEN_EXPIRATION_TIME = "access_token_expiration_time";
     String AGE_OF_REFRESH_TOKEN = "age_of_refresh_token";
+
+    String CLIENT_POLICY_ERROR = "client_policy_error";
+    String CLIENT_POLICY_ERROR_DETAIL = "client_policy_error_detail";
 }

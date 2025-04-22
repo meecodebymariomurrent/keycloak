@@ -16,19 +16,24 @@
  */
 package org.keycloak.authorization;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Path;
+import jakarta.persistence.criteria.Predicate;
 import org.keycloak.authorization.model.Policy;
 import org.keycloak.authorization.model.Resource;
 import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.authorization.model.Scope;
+import org.keycloak.authorization.policy.evaluation.PolicyEvaluator;
+import org.keycloak.authorization.policy.provider.PartialEvaluationStorageProvider;
 import org.keycloak.authorization.store.ResourceStore;
 import org.keycloak.authorization.store.ScopeStore;
 import org.keycloak.authorization.store.StoreFactory;
@@ -52,14 +57,11 @@ import org.keycloak.models.utils.RepresentationToModel;
 import org.keycloak.provider.ProviderEvent;
 import org.keycloak.representations.idm.authorization.AbstractPolicyRepresentation;
 import org.keycloak.representations.idm.authorization.AuthorizationSchema;
-import org.keycloak.representations.idm.authorization.GroupPolicyRepresentation;
 import org.keycloak.representations.idm.authorization.ResourceRepresentation;
 import org.keycloak.representations.idm.authorization.ResourceServerRepresentation;
 import org.keycloak.representations.idm.authorization.ResourceType;
-import org.keycloak.representations.idm.authorization.RolePolicyRepresentation;
 import org.keycloak.representations.idm.authorization.ScopePermissionRepresentation;
 import org.keycloak.representations.idm.authorization.ScopeRepresentation;
-import org.keycloak.util.JsonSerialization;
 
 public class AdminPermissionsSchema extends AuthorizationSchema {
 
@@ -73,7 +75,6 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
     public static final String VIEW = "view";
 
     // client specific scopes
-    public static final String CONFIGURE = "configure";
     public static final String MAP_ROLES = "map-roles";
     public static final String MAP_ROLES_CLIENT_SCOPE = "map-roles-client-scope";
     public static final String MAP_ROLES_COMPOSITE = "map-roles-composite";
@@ -82,6 +83,7 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
     public static final String MANAGE_MEMBERSHIP = "manage-membership";
     public static final String MANAGE_MEMBERS = "manage-members";
     public static final String VIEW_MEMBERS = "view-members";
+    public static final String IMPERSONATE_MEMBERS = "impersonate-members";
 
     // role specific scopes
     public static final String MAP_ROLE = "map-role";
@@ -93,12 +95,15 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
 
     public static final String MANAGE_GROUP_MEMBERSHIP = "manage-group-membership";
 
-    public static final ResourceType CLIENTS = new ResourceType(CLIENTS_RESOURCE_TYPE, Set.of(CONFIGURE, MANAGE, MAP_ROLES, MAP_ROLES_CLIENT_SCOPE, MAP_ROLES_COMPOSITE, VIEW));
-    public static final ResourceType GROUPS = new ResourceType(GROUPS_RESOURCE_TYPE, Set.of(MANAGE, VIEW, MANAGE_MEMBERSHIP, MANAGE_MEMBERS, VIEW_MEMBERS));
+    public static final ResourceType CLIENTS = new ResourceType(CLIENTS_RESOURCE_TYPE, Set.of(MANAGE, MAP_ROLES, MAP_ROLES_CLIENT_SCOPE, MAP_ROLES_COMPOSITE, VIEW));
+    public static final ResourceType GROUPS = new ResourceType(GROUPS_RESOURCE_TYPE, Set.of(MANAGE, VIEW, MANAGE_MEMBERSHIP, MANAGE_MEMBERS, VIEW_MEMBERS, IMPERSONATE_MEMBERS));
     public static final ResourceType ROLES = new ResourceType(ROLES_RESOURCE_TYPE, Set.of(MAP_ROLE, MAP_ROLE_CLIENT_SCOPE, MAP_ROLE_COMPOSITE));
-    public static final ResourceType USERS = new ResourceType(USERS_RESOURCE_TYPE, Set.of(MANAGE, VIEW, IMPERSONATE, MAP_ROLES, MANAGE_GROUP_MEMBERSHIP));
-
+    public static final ResourceType USERS = new ResourceType(USERS_RESOURCE_TYPE, Set.of(MANAGE, VIEW, IMPERSONATE, MAP_ROLES, MANAGE_GROUP_MEMBERSHIP), Map.of(VIEW, Set.of(VIEW_MEMBERS), MANAGE, Set.of(MANAGE_MEMBERS), IMPERSONATE, Set.of(IMPERSONATE_MEMBERS)), GROUPS.getType());
+    private static final String SKIP_EVALUATION = "kc.authz.fgap.skip";
     public static final AdminPermissionsSchema SCHEMA = new AdminPermissionsSchema();
+
+    private final PartialEvaluator partialEvaluator = new PartialEvaluator();
+    private final PolicyEvaluator policyEvaluator = new FGAPPolicyEvaluator();
 
     private AdminPermissionsSchema() {
         super(Map.of(
@@ -276,6 +281,7 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
         }
 
         client = clients.addClient(realm, Constants.ADMIN_PERMISSIONS_CLIENT_ID);
+        client.setProtocol("openid-connect");
 
         realm.setAdminPermissionsClient(client);
 
@@ -367,10 +373,18 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
 
         if (supportsAuthorizationSchema(session, resourceServer)) {
             switch (resourceType) {
-                case CLIENTS_RESOURCE_TYPE -> resolveClient(session, resourceName).map(ClientModel::getClientId).orElse(resourceType);
-                case GROUPS_RESOURCE_TYPE -> resolveGroup(session, resourceName).map(GroupModel::getName).orElse(resourceType);
-                case ROLES_RESOURCE_TYPE -> resolveRole(session, resourceName).map(RoleModel::getName).orElse(resourceType);
-                case USERS_RESOURCE_TYPE -> resolveUser(session, resourceName).map(UserModel::getUsername).orElse(resourceType);
+                case CLIENTS_RESOURCE_TYPE -> {
+                    return resolveClient(session, resourceName).map(ClientModel::getClientId).orElse(resourceType);
+                }
+                case GROUPS_RESOURCE_TYPE -> {
+                    return resolveGroup(session, resourceName).map(GroupModel::getName).orElse(resourceType);
+                }
+                case ROLES_RESOURCE_TYPE -> {
+                    return resolveRole(session, resourceName).map(RoleModel::getName).orElse(resourceType);
+                }
+                case USERS_RESOURCE_TYPE -> {
+                    return resolveUser(session, resourceName).map(UserModel::getUsername).orElse(resourceType);
+                }
                 default -> throw new IllegalStateException("Resource type [" + resourceType + "] not found.");
             }
         }
@@ -425,5 +439,79 @@ public class AdminPermissionsSchema extends AuthorizationSchema {
             //remove the resource associated with the object
             authorization.getStoreFactory().getResourceStore().delete(resource.getId());
         }
+    }
+
+    public List<Predicate> applyAuthorizationFilters(KeycloakSession session, ResourceType resourceType, RealmModel realm, CriteriaBuilder builder, CriteriaQuery<?> queryBuilder, Path<?> path) {
+        return applyAuthorizationFilters(session, resourceType, null, realm, builder, queryBuilder, path);
+    }
+
+    public List<Predicate> applyAuthorizationFilters(KeycloakSession session, ResourceType resourceType, PartialEvaluationStorageProvider evaluator, RealmModel realm, CriteriaBuilder builder, CriteriaQuery<?> queryBuilder, Path<?> path) {
+        return partialEvaluator.getPredicates(session, resourceType, evaluator, realm, builder, queryBuilder, path);
+    }
+
+    public PolicyEvaluator getPolicyEvaluator(KeycloakSession session, ResourceServer resourceServer) {
+        if (resourceServer == null) {
+            return null;
+        }
+
+        RealmModel realm = session.getContext().getRealm();
+
+        if (isAdminPermissionClient(realm, resourceServer.getId())) {
+            return policyEvaluator;
+        }
+
+        return null;
+    }
+
+    public Set<String> getScopeAliases(String resourceType, Scope scope) {
+        ResourceType type = getResourceTypes().get(resourceType);
+        Set<String> aliases = type.getScopeAliases().get(scope.getName());
+
+        if (aliases == null) {
+            aliases = new HashSet<>();
+            for (Entry<String, Set<String>> entry : type.getScopeAliases().entrySet()) {
+                if (entry.getValue().contains(scope.getName())) {
+                    aliases.add(entry.getKey());
+                }
+            }
+        }
+
+        return aliases;
+    }
+
+    /**
+     * <p>Disables authorization and evaluation of permissions for realm resource types when executing the given {@code runnable}
+     * in the context of the given {@code session}.
+     *
+     * <p>This method should be used whenever a code block should be executed without any evaluation or filtering based on
+     * the permissions set to a realm. For instance, when caching realm resources where access enforcement does not apply.
+     *
+     * @param session the session. If {@code null}, authorization is enabled when executing the code block
+     * @param runnable the runnable to execute
+     */
+    public static void runWithoutAuthorization(KeycloakSession session, Runnable runnable) {
+        if (isSkipEvaluation(session)) {
+            runnable.run();
+            return;
+        }
+
+        try {
+            session.setAttribute(SKIP_EVALUATION, Boolean.TRUE.toString());
+            runnable.run();
+        } finally {
+            session.removeAttribute(SKIP_EVALUATION);
+        }
+    }
+
+    /**
+     * Returns if authorization is disabled in the context of the given {@code session} at the moment that this method is called.
+     *
+     * @param session the session
+     * @return {@code true} if authorization is disabled. Otherwise, returns {@code false}.
+     * Otherwise, {@code false}.
+     * @see AdminPermissionsSchema#runWithoutAuthorization(KeycloakSession, Runnable)
+     */
+    public static boolean isSkipEvaluation(KeycloakSession session) {
+        return session == null || Boolean.parseBoolean(session.getAttributeOrDefault(SKIP_EVALUATION, Boolean.FALSE.toString()));
     }
 }

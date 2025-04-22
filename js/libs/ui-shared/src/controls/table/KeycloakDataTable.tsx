@@ -88,21 +88,21 @@ const CellRenderer = ({
   index,
   actions,
   actionResolver,
-}: CellRendererProps) => (
-  <>
-    {row.cells!.map((c, i) => (
-      <Td key={`cell-${i}`}>{(isRow(c) ? c.title : c) as ReactNode}</Td>
-    ))}
-    {(actions || actionResolver) && (
-      <Td isActionCell>
-        <ActionsColumn
-          items={actions || actionResolver?.(row, {})!}
-          extraData={{ rowIndex: index }}
-        />
-      </Td>
-    )}
-  </>
-);
+}: CellRendererProps) => {
+  const items = actions || actionResolver?.(row, {});
+  return (
+    <>
+      {row.cells!.map((c, i) => (
+        <Td key={`cell-${i}`}>{(isRow(c) ? c.title : c) as ReactNode}</Td>
+      ))}
+      {items && items.length > 0 && !row.disableActions && (
+        <Td isActionCell>
+          <ActionsColumn items={items} extraData={{ rowIndex: index }} />
+        </Td>
+      )}
+    </>
+  );
+};
 
 const ExpandableRowRenderer = ({ row }: CellRendererProps) =>
   row.cells!.map((c, i) => (
@@ -156,24 +156,31 @@ function DataTable<T>({
   };
 
   const updateState = (rowIndex: number, isSelected: boolean) => {
-    if (rowIndex === -1) {
-      const rowsSelectedOnPageIds = rowsSelectedOnPage.map((v) => get(v, "id"));
-      updateSelectedRows(
-        isSelected
-          ? [...selectedRows, ...rows.map((row) => row.data)]
-          : selectedRows.filter(
-              (v) => !rowsSelectedOnPageIds.includes(get(v, "id")),
-            ),
-      );
+    if (isRadio) {
+      const selectedRow = isSelected ? [rows[rowIndex].data] : [];
+      updateSelectedRows(selectedRow);
     } else {
-      if (isSelected) {
-        updateSelectedRows([...selectedRows, rows[rowIndex].data]);
-      } else {
-        updateSelectedRows(
-          selectedRows.filter(
-            (v) => get(v, "id") !== (rows[rowIndex] as IRow).data.id,
-          ),
+      if (rowIndex === -1) {
+        const rowsSelectedOnPageIds = rowsSelectedOnPage.map((v) =>
+          get(v, "id"),
         );
+        updateSelectedRows(
+          isSelected
+            ? [...selectedRows, ...rows.map((row) => row.data)]
+            : selectedRows.filter(
+                (v) => !rowsSelectedOnPageIds.includes(get(v, "id")),
+              ),
+        );
+      } else {
+        if (isSelected) {
+          updateSelectedRows([...selectedRows, rows[rowIndex].data]);
+        } else {
+          updateSelectedRows(
+            selectedRows.filter(
+              (v) => get(v, "id") !== (rows[rowIndex] as IRow).data.id,
+            ),
+          );
+        }
       }
     }
   };
@@ -228,6 +235,7 @@ function DataTable<T>({
                       (v) => get(v, "id") === row.data.id,
                     ),
                     variant: isRadio ? "radio" : "checkbox",
+                    isDisabled: row.disableSelection,
                   }}
                 />
               )}

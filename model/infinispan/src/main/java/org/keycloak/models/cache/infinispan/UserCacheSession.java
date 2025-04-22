@@ -113,7 +113,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
     public void clear() {
         cache.clear();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-        cluster.notify(InfinispanUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), true, ClusterProvider.DCNotify.ALL_DCS);
+        cluster.notify(InfinispanUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), true);
     }
 
     public UserProvider getDelegate() {
@@ -348,7 +348,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         CachedUser cached;
         UserAdapter adapter;
 
-        if (delegate.getFederationLink() != null) {
+        if (delegate.isFederated()) {
             ComponentModel component = realm.getComponent(delegate.getFederationLink());
             UserStorageProviderModel model = new UserStorageProviderModel(component);
             if (!model.isEnabled()) {

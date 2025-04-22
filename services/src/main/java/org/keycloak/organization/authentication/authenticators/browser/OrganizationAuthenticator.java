@@ -18,6 +18,8 @@
 package org.keycloak.organization.authentication.authenticators.browser;
 
 import static org.keycloak.authentication.AuthenticatorUtil.isSSOAuthentication;
+import static org.keycloak.models.OrganizationDomainModel.ANY_DOMAIN;
+import static org.keycloak.models.utils.KeycloakModelUtils.findUserByNameOrEmail;
 import static org.keycloak.organization.utils.Organizations.getEmailDomain;
 import static org.keycloak.organization.utils.Organizations.isEnabledAndOrganizationsPresent;
 import static org.keycloak.organization.utils.Organizations.resolveHomeBroker;
@@ -32,7 +34,6 @@ import java.util.stream.Stream;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.authenticators.browser.IdentityProviderAuthenticator;
@@ -45,12 +46,13 @@ import org.keycloak.models.AuthenticatorConfigModel;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakContext;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.OrganizationDomainModel;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.OrganizationModel.IdentityProviderRedirectMode;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
-import org.keycloak.models.UserProvider;
 import org.keycloak.models.utils.FormMessage;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.organization.forms.login.freemarker.model.OrganizationAwareAuthenticationContextBean;
 import org.keycloak.organization.forms.login.freemarker.model.OrganizationAwareIdentityProviderBean;
@@ -244,18 +246,26 @@ public class OrganizationAuthenticator extends IdentityProviderAuthenticator {
             return false;
         }
 
-        List<IdentityProviderModel> brokers = organization.getIdentityProviders().toList();
+        // first look for an IDP that matches exactly the specified domain
+        IdentityProviderModel idp = organization.getIdentityProviders()
+                .filter(broker -> IdentityProviderRedirectMode.EMAIL_MATCH.isSet(broker) &&
+                    domain.equals(broker.getConfig().get(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE))).findFirst().orElse(null);
 
-        for (IdentityProviderModel broker : brokers) {
-            if (IdentityProviderRedirectMode.EMAIL_MATCH.isSet(broker)) {
-                String idpDomain = broker.getConfig().get(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE);
+        if (idp != null) {
+            // redirect the user using the broker that matches the specified domain
+            redirect(context, idp.getAlias(), username);
+            return true;
+        }
 
-                if (domain.equals(idpDomain)) {
-                    // redirect the user using the broker that matches the email domain
-                    redirect(context, broker.getAlias(), username);
-                    return true;
-                }
-            }
+        // look for an idp that can match any of the org domains
+        idp = organization.getIdentityProviders().filter(IdentityProviderRedirectMode.EMAIL_MATCH::isSet)
+                .filter(broker -> ANY_DOMAIN.equals(broker.getConfig().get(OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE)))
+                .filter(broker -> organization.getDomains().map(OrganizationDomainModel::getName).anyMatch(domain::equals))
+                .findFirst().orElse(null);
+
+        if (idp != null) {
+            redirect(context, idp.getAlias(), username);
+            return true;
         }
 
         return false;
@@ -270,9 +280,8 @@ public class OrganizationAuthenticator extends IdentityProviderAuthenticator {
             return null;
         }
 
-        UserProvider users = session.users();
         RealmModel realm = session.getContext().getRealm();
-        UserModel user = Optional.ofNullable(users.getUserByEmail(realm, username)).orElseGet(() -> users.getUserByUsername(realm, username));
+        UserModel user = findUserByNameOrEmail(session, realm, username);
 
         // make sure the organization will be resolved based on the username provided
         clearAuthenticationSession(context);

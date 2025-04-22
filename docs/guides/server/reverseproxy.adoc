@@ -22,7 +22,7 @@ The port `8443` (or `8080` if HTTP is enabled) is used for the Admin UI, Account
 
 The port `9000` is used for management, which includes endpoints for health checks and metrics as described in the  <@links.server id="management-interface"/> {section}.
 
-You only need to proxy port `8443` (or `8080`) even when you use different host names for frontend/backend and administration as described at <@links.server id="configure-production"/>. You should not proxy port `9000` as health checks and metrics use those ports directly, and you do not want to expose this information to external callers.
+You only need to proxy port `8443` (or `8080`) even when you use different host names for frontend/backend and administration as described at <@links.server id="configuration-production"/>. You should not proxy port `9000` as health checks and metrics use those ports directly, and you do not want to expose this information to external callers.
 
 == Configure the reverse proxy headers
 
@@ -221,6 +221,9 @@ to load additional certificates from headers `CERT_CHAIN_0` to `CERT_CHAIN_9` if
 
 |trust-proxy-verification
 | Enable trusting NGINX proxy certificate verification, instead of forwarding the certificate to {project_name} and verifying it in {project_name}.
+
+|cert-is-url-encoded
+| Whether the forwarded certificate is url-encoded or not. In NGINX, this corresponds to the `$ssl_client_cert` and `$ssl_client_escaped_cert` variables. This can also be used for the Traefik PassTlsClientCert middleware, as it sends the client certficate unencoded.
 |===
 
 === Configuring the NGINX provider

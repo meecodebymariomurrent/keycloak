@@ -248,6 +248,14 @@ public class AssertEvents implements TestRule {
                 .session(isUUID());
     }
 
+    public ExpectedEvent expectClientPolicyError(EventType eventType, String error, String reason, String clientPolicyError, String clientPolicyErrorDetail) {
+        return expect(eventType)
+                .error(error)
+                .detail(Details.REASON, reason)
+                .detail(Details.CLIENT_POLICY_ERROR, clientPolicyError)
+                .detail(Details.CLIENT_POLICY_ERROR_DETAIL, clientPolicyErrorDetail);
+    }
+
     public ExpectedEvent expect(EventType event) {
         return new ExpectedEvent()
                 .realm(defaultRealmId())
@@ -414,7 +422,7 @@ public class AssertEvents implements TestRule {
                 Assert.fail("Did not find the event of expected type " + expected.getType() +". Events present: " + presentedEventTypes);
                 return null; // Unreachable code
             } else {
-                return assertEvent(poll());
+                return assertEvent(poll(seconds));
             }
         }
 
@@ -452,6 +460,11 @@ public class AssertEvents implements TestRule {
             }
 
             return actual;
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getSimpleName() + ":" + expected.getType();
         }
     }
 

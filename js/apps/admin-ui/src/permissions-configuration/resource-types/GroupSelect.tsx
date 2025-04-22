@@ -1,19 +1,26 @@
 import GroupRepresentation from "@keycloak/keycloak-admin-client/lib/defs/groupRepresentation";
-import type { GroupQuery } from "@keycloak/keycloak-admin-client/lib/resources/groups";
 import {
-  SelectControl,
-  SelectVariant,
+  FormErrorText,
+  HelpItem,
   useFetch,
 } from "@keycloak/keycloak-ui-shared";
+import { Button, FormGroup } from "@patternfly/react-core";
+import { MinusCircleIcon } from "@patternfly/react-icons";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../admin-client";
 import type { ComponentProps } from "../../components/dynamic/components";
+import { GroupPickerDialog } from "../../components/group/GroupPickerDialog";
 
 type GroupSelectProps = Omit<ComponentProps, "convertToName"> & {
-  variant?: `${SelectVariant}`;
+  variant?: "typeahead" | "typeaheadMulti";
   isRequired?: boolean;
 };
+
+const convertGroups = (groups: GroupRepresentation[]): string[] =>
+  groups.map(({ id }) => id!);
 
 export const GroupSelect = ({
   name,
@@ -22,49 +29,129 @@ export const GroupSelect = ({
   defaultValue,
   isDisabled = false,
   isRequired,
-  variant = "typeahead",
+  variant = "typeaheadMulti",
 }: GroupSelectProps) => {
   const { adminClient } = useAdminClient();
   const { t } = useTranslation();
+  const {
+    control,
+    setValue,
+    getValues,
+    formState: { errors },
+  } = useFormContext();
+  const values: string[] = getValues(name!);
+  const [open, setOpen] = useState(false);
   const [groups, setGroups] = useState<GroupRepresentation[]>([]);
-  const [search, setSearch] = useState("");
 
   useFetch(
     () => {
-      const params: GroupQuery = {
-        max: 20,
-      };
-      if (search) {
-        params.search = search;
+      if (values && values.length > 0) {
+        return Promise.all(
+          (values as string[]).map((id) => adminClient.groups.findOne({ id })),
+        );
       }
-      return adminClient.groups.find(params);
+      return Promise.resolve([]);
     },
-    (groups) => setGroups(groups),
-    [search],
+    (groups) => {
+      setGroups(groups.flat().filter((g) => g) as GroupRepresentation[]);
+    },
+    [],
   );
 
+  const selectOne = variant === "typeahead";
+
   return (
-    <SelectControl
-      name={name!}
+    <FormGroup
       label={t(label!)}
-      labelIcon={t(helpText!)}
-      controller={{
-        defaultValue: defaultValue || "",
-        rules: {
-          required: {
-            value: isRequired || false,
-            message: t("required"),
+      labelIcon={<HelpItem helpText={t(helpText!)} fieldLabelId="groups" />}
+      fieldId="groups"
+      isRequired={isRequired}
+    >
+      <Controller
+        name={name!}
+        control={control}
+        defaultValue={defaultValue}
+        rules={{
+          validate: (value?: string[]) => {
+            return isRequired && value && value.length > 0;
           },
-        },
-      }}
-      onFilter={(value) => setSearch(value)}
-      variant={variant}
-      isDisabled={isDisabled}
-      options={groups.map(({ id, name }) => ({
-        key: id!,
-        value: name!,
-        label: name,
-      }))}
-    />
+        }}
+        render={({ field }) => (
+          <>
+            {open && (
+              <GroupPickerDialog
+                type={selectOne ? "selectOne" : "selectMany"}
+                text={{
+                  title: "addGroupsToGroupPolicy",
+                  ok: "add",
+                }}
+                onConfirm={(selectGroup) => {
+                  if (selectOne) {
+                    field.onChange(convertGroups(selectGroup || []));
+                    setGroups(selectGroup || []);
+                  } else {
+                    field.onChange([
+                      ...(field.value || []),
+                      ...convertGroups(selectGroup || []),
+                    ]);
+                    setGroups([...groups, ...(selectGroup || [])]);
+                  }
+                  setOpen(false);
+                }}
+                onClose={() => {
+                  setOpen(false);
+                }}
+                filterGroups={groups}
+              />
+            )}
+            <Button
+              data-testid="select-group-button"
+              isDisabled={isDisabled}
+              variant="secondary"
+              onClick={() => {
+                setOpen(true);
+              }}
+            >
+              {t("addGroups")}
+            </Button>
+          </>
+        )}
+      />
+      {groups.length > 0 && (
+        <Table variant="compact">
+          <Thead>
+            <Tr>
+              <Th>{t("groups")}</Th>
+              <Th aria-hidden="true" />
+            </Tr>
+          </Thead>
+          <Tbody>
+            {groups.map((group) => (
+              <Tr key={group.id}>
+                <Td>{group.path}</Td>
+                <Td>
+                  <Button
+                    variant="link"
+                    className="keycloak__client-authorization__policy-row-remove"
+                    icon={<MinusCircleIcon />}
+                    onClick={() => {
+                      setValue(name!, [
+                        ...convertGroups(
+                          (groups || []).filter(({ id }) => id !== group.id),
+                        ),
+                      ]);
+                      setGroups([
+                        ...groups.filter(({ id }) => id !== group.id),
+                      ]);
+                    }}
+                  />
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      )}
+      {errors[name!] && <FormErrorText message={t("requiredGroups")} />}
+    </FormGroup>
   );
 };

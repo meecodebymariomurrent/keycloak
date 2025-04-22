@@ -408,7 +408,7 @@ public class UserResource {
         }
         EventBuilder event = new EventBuilder(realm, session, clientConnection);
 
-        UserSessionModel userSession = new UserSessionManager(session).createUserSession(realm, user, user.getUsername(), clientConnection.getRemoteAddr(), "impersonate", false, null, null);
+        UserSessionModel userSession = new UserSessionManager(session).createUserSession(realm, user, user.getUsername(), clientConnection.getRemoteHost(), "impersonate", false, null, null);
 
         UserModel adminUser = auth.adminAuth().getUser();
         String impersonatorId = adminUser.getId();
@@ -1108,7 +1108,7 @@ public class UserResource {
                                                        @QueryParam("max") Integer maxResults,
                                                        @QueryParam("briefRepresentation") @DefaultValue("true") boolean briefRepresentation) {
         auth.users().requireView(user);
-        return user.getGroupsStream(search, firstResult, maxResults).map(g -> ModelToRepresentation.toRepresentation(g, !briefRepresentation));
+        return user.getGroupsStream(search, firstResult, maxResults).filter(auth.groups()::canView).map(g -> ModelToRepresentation.toRepresentation(g, !briefRepresentation));
     }
 
     @GET

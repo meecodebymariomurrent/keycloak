@@ -52,6 +52,50 @@ class VerifyMessagePropertiesTest {
     }
 
     @Test
+    void verifySingleCurlyBraces() throws MojoExecutionException {
+        List<String> verify = getFile("doubleCurlyBraces_en.properties").withValidateMessageFormatQuotes(true).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Double curly braces are not allowed")));
+    }
+
+    @Test
+    void verifyNoDoubleCurlyBrances() throws MojoExecutionException {
+        List<String> verify = getFile("doubleCurlyBraces_en.properties").withValidateMessageFormatQuotes(true).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Double curly braces are not allowed")));
+    }
+
+    @Test
+    void verifyNoSingleCurlyBraces() throws MojoExecutionException {
+        List<String> verify = getFile("singleCurlyBracesEnd_en.properties").withValidateMessageFormatQuotes(false).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single curly quotes are not supported")));
+
+        verify = getFile("singleCurlyBracesMiddle_en.properties").withValidateMessageFormatQuotes(false).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single curly quotes are not supported")));
+
+        verify = getFile("singleCurlyBracesStart_en.properties").withValidateMessageFormatQuotes(false).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single curly quotes are not supported")));
+
+    }
+
+    @Test
+    void verifyNoSingleQuoteForMessageFormat() throws MojoExecutionException {
+        List<String> verify = getFile("singleQuotesStart_en.properties").withValidateMessageFormatQuotes(true).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single quotes are not allowed")));
+
+        verify = getFile("singleQuotesMiddle_en.properties").withValidateMessageFormatQuotes(true).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single quotes are not allowed")));
+
+        verify = getFile("singleQuotesEnd_en.properties").withValidateMessageFormatQuotes(true).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Single quotes are not allowed")));
+
+    }
+
+    @Test
+    void verifyNoDoubleQuoteForUIMessages() throws MojoExecutionException {
+        List<String> verify = getFile("doubleSingleQuotes_en.properties").withValidateMessageFormatQuotes(false).verify();
+        MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Double single quotes are not allowed")));
+    }
+
+    @Test
     void verifyNoExtraBlanks() throws MojoExecutionException {
         List<String> verify = getFile("blanks_en.properties").verify();
         MatcherAssert.assertThat(verify, Matchers.hasItem(Matchers.containsString("Duplicate blanks")));

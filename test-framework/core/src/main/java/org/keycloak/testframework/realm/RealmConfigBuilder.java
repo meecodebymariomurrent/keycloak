@@ -4,7 +4,6 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RolesRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.representations.userprofile.config.UPConfig;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -34,6 +33,11 @@ public class RealmConfigBuilder {
 
     public RealmConfigBuilder name(String name) {
         rep.setRealm(name);
+        return this;
+    }
+
+    public RealmConfigBuilder displayName(String displayName) {
+        rep.setDisplayName(displayName);
         return this;
     }
 
@@ -134,8 +138,8 @@ public class RealmConfigBuilder {
         return this;
     }
 
-    public RealmConfigBuilder internationalizationEnabled() {
-        rep.setInternationalizationEnabled(true);
+    public RealmConfigBuilder internationalizationEnabled(boolean enabled) {
+        rep.setInternationalizationEnabled(enabled);
         return this;
     }
 
@@ -147,12 +151,32 @@ public class RealmConfigBuilder {
         return this;
     }
 
+    public RealmConfigBuilder defaultLocale(String locale) {
+        rep.setDefaultLocale(locale);
+        return this;
+    }
+
     public RealmConfigBuilder smtp(String host, int port, String from) {
         Map<String, String> config = new HashMap<>();
         config.put("host", host);
         config.put("port", Integer.toString(port));
         config.put("from", from);
         rep.setSmtpServer(config);
+        return this;
+    }
+
+    public RealmConfigBuilder organizationsEnabled(boolean organizationsEnabled) {
+        rep.setOrganizationsEnabled(organizationsEnabled);
+        return this;
+    }
+
+    public RealmConfigBuilder bruteForceProtected(boolean enabled) {
+        rep.setBruteForceProtected(enabled);
+        return this;
+    }
+
+    public RealmConfigBuilder failureFactor(int count) {
+        rep.setFailureFactor(count);
         return this;
     }
 

@@ -25,22 +25,20 @@ import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 import org.keycloak.cluster.infinispan.remote.RemoteInfinispanClusterProviderFactory;
 import org.keycloak.connections.infinispan.remote.RemoteLoadBalancerCheckProviderFactory;
-import org.keycloak.infinispan.util.InfinispanUtils;
-import org.keycloak.models.UserSessionSpi;
 import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanAuthenticationSessionProviderFactory;
 import org.keycloak.models.sessions.infinispan.remote.RemoteInfinispanSingleUseObjectProviderFactory;
 import org.keycloak.models.sessions.infinispan.remote.RemoteStickySessionEncoderProviderFactory;
 import org.keycloak.models.sessions.infinispan.remote.RemoteUserLoginFailureProviderFactory;
 import org.keycloak.models.sessions.infinispan.remote.RemoteUserSessionProviderFactory;
 import org.keycloak.provider.ProviderFactory;
+import org.keycloak.spi.infinispan.CacheRemoteConfigProviderSpi;
+import org.keycloak.spi.infinispan.impl.remote.DefaultCacheRemoteConfigProviderFactory;
 import org.keycloak.testsuite.model.Config;
 import org.keycloak.testsuite.model.HotRodServerRule;
 import org.keycloak.testsuite.model.KeycloakModelParameters;
 
 /**
- * Copied from {@link CrossDCInfinispan}.
- * <p>
- * Adds the new provider factories implementation
+ * Enables RemoteInfinispan and adds all classes needed to connect to remote Infinispan to allowed factories
  */
 public class RemoteInfinispan extends KeycloakModelParameters {
 
@@ -68,22 +66,20 @@ public class RemoteInfinispan extends KeycloakModelParameters {
     @Override
     public void updateConfig(Config cf) {
         synchronized (lock) {
-            NODE_COUNTER.incrementAndGet();
+            var nodeCounter = NODE_COUNTER.incrementAndGet();
+            var siteName = siteName(nodeCounter);
             cf.spi("connectionsInfinispan")
                     .provider("default")
                     .config("embedded", "true")
                     .config("clustered", "true")
-                    .config("remoteStoreEnabled", "true")
                     .config("useKeycloakTimeService", "true")
-                    .config("remoteStoreSecurityEnabled", "false")
-                    .config("nodeName", "node-" + NODE_COUNTER.get())
-                    .config("siteName", siteName(NODE_COUNTER.get()))
-                    .config("remoteStorePort", siteName(NODE_COUNTER.get()).equals("site-2") ? "11333" : "11222")
-                    .config("jgroupsUdpMcastAddr", mcastAddr(NODE_COUNTER.get()))
-                    .spi(UserSessionSpi.NAME)
-                    .provider(InfinispanUtils.EMBEDDED_PROVIDER_ID)
-                    .config("offlineSessionCacheEntryLifespanOverride", "43200")
-                    .config("offlineClientSessionCacheEntryLifespanOverride", "43200");
+                    .config("nodeName", "node-" + nodeCounter)
+                    .config("siteName", siteName)
+                    .config("jgroupsUdpMcastAddr", mcastAddr(nodeCounter));
+            cf.spi(CacheRemoteConfigProviderSpi.SPI_NAME)
+                    .provider(DefaultCacheRemoteConfigProviderFactory.PROVIDER_ID)
+                    .config(DefaultCacheRemoteConfigProviderFactory.HOSTNAME, "localhost")
+                    .config(DefaultCacheRemoteConfigProviderFactory.PORT, siteName.equals("site-2") ? "11333" : "11222");
         }
     }
 

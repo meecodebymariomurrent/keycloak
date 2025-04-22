@@ -72,7 +72,12 @@ export const UserSelect = ({
 
       return foundUsers.filter((user) => user !== undefined);
     },
-    setSelectedUsers,
+    (users) => {
+      setSelectedUsers(users);
+      if (variant !== "typeaheadMulti") {
+        setInputValue(users[0]?.username || "");
+      }
+    },
     [values],
   );
 
@@ -113,7 +118,7 @@ export const UserSelect = ({
     <FormGroup
       label={t(label!)}
       isRequired={isRequired}
-      labelIcon={<HelpItem helpText={helpText!} fieldLabelId={label!} />}
+      labelIcon={<HelpItem helpText={helpText!} fieldLabelId={t(label!)} />}
       fieldId={name!}
     >
       <Controller

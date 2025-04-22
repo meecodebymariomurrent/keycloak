@@ -22,15 +22,18 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.lang.reflect.Field;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.keycloak.Config;
 import org.keycloak.common.Profile;
+import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.cli.ExecutionExceptionHandler;
 import org.keycloak.quarkus.runtime.configuration.ConfigArgsConfigSource;
 import org.keycloak.quarkus.runtime.configuration.Configuration;
@@ -55,7 +58,11 @@ public abstract class AbstractConfigurationTest {
         try {
             field = env.getClass().getDeclaredField("m");
             field.setAccessible(true);
-            ((Map<String, String>) field.get(env)).put(name, value);
+            if (value == null) {
+                ((Map<String, String>) field.get(env)).remove(name);
+            } else {
+                ((Map<String, String>) field.get(env)).put(name, value);
+            }
         } catch (Exception cause) {
             throw new RuntimeException("Failed to update environment variables", cause);
         } finally {
@@ -99,6 +106,7 @@ public abstract class AbstractConfigurationTest {
     @BeforeClass
     public static void resetConfiguration() {
         System.setProperties((Properties) SYSTEM_PROPERTIES.clone());
+        Environment.setHomeDir(Paths.get("src/test/resources/"));
 
         for (String name : new HashMap<>(System.getenv()).keySet()) {
             if (!ENVIRONMENT_VARIABLES.containsKey(name)) {
@@ -124,6 +132,11 @@ public abstract class AbstractConfigurationTest {
         resetConfiguration();
     }
 
+    @AfterClass
+    public static void afterAll() {
+        Environment.removeHomeDir();
+    }
+
     protected Config.Scope initConfig(String... scope) {
         Config.init(new MicroProfileConfigProvider(createConfig()));
         return Config.scope(scope);
@@ -132,6 +145,7 @@ public abstract class AbstractConfigurationTest {
     static protected SmallRyeConfig createConfig() {
         Configuration.resetConfig();
         KeycloakConfigSourceProvider.reload();
+        Environment.getCurrentOrCreateFeatureProfile();
         return Configuration.getConfig();
     }
 

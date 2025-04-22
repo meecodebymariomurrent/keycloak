@@ -122,7 +122,7 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
             return new ReadOnlyUserModelDelegate(user, false);
         }
 
-        if (user == null || user.getFederationLink() == null) return user;
+        if (user == null || !user.isFederated()) return user;
 
         UserStorageProviderModel model = getStorageProviderModel(realm, user.getFederationLink());
         if (model == null) {
@@ -227,6 +227,7 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         runJobInTransaction(session.getKeycloakSessionFactory(), session -> {
             RealmModel realmModel = session.realms().getRealm(realm.getId());
             if (realmModel == null) return;
+            session.getContext().setRealm(realm);
             UserModel deletedUser = UserStoragePrivateUtil.userLocalStorage(session).getUserById(realmModel, userId);
             if (deletedUser != null) {
                 try {
@@ -384,9 +385,8 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         StorageId storageId = new StorageId(user.getId());
 
         if (storageId.getProviderId() == null) {
-            String federationLink = user.getFederationLink();
-            boolean linkRemoved = federationLink == null || Optional.ofNullable(
-                    getStorageProviderInstance(realm, federationLink, UserRegistrationProvider.class))
+            boolean linkRemoved = !user.isFederated() || Optional.ofNullable(
+                    getStorageProviderInstance(realm, user.getFederationLink(), UserRegistrationProvider.class))
                     .map(provider -> provider.removeUser(realm, user))
                     .orElse(false);
 

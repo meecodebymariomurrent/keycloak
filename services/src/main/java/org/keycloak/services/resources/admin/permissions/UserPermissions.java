@@ -19,8 +19,8 @@ package org.keycloak.services.resources.admin.permissions;
 import org.keycloak.authorization.AuthorizationProvider;
 import org.keycloak.authorization.common.ClientModelIdentity;
 import org.keycloak.authorization.common.DefaultEvaluationContext;
-import org.keycloak.authorization.common.UserModelIdentity;
 import org.keycloak.authorization.identity.Identity;
+import org.keycloak.authorization.identity.UserModelIdentity;
 import org.keycloak.authorization.model.Policy;
 import org.keycloak.authorization.model.Resource;
 import org.keycloak.authorization.model.ResourceServer;
@@ -439,6 +439,11 @@ class UserPermissions implements UserPermissionEvaluator, UserPermissionManageme
     }
 
     @Override
+    public Map<String, Boolean> getAccessForListing(UserModel user) {
+        return Map.of("manage", canManage(user));
+    }
+
+    @Override
     public boolean canMapRoles(UserModel user) {
         if (canManage(user)) return true;
 
@@ -579,7 +584,7 @@ class UserPermissions implements UserPermissionEvaluator, UserPermissionManageme
         return evaluateHierarchy(eval, group.getParent(), visited);
     }
 
-    protected boolean canManageByGroup(UserModel user) {
+    private boolean canManageByGroup(UserModel user) {
         if (authz == null) return false;
         return evaluateHierarchy(user, root.groups()::canManageMembers);
     }

@@ -664,7 +664,7 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         assertEquals(clientId, rep.getClientId());
         assertEquals(clientId, rep.getIssuedFor());
         assertEquals(username, rep.getUserName());
-        events.expect(EventType.INTROSPECT_TOKEN).client(clientId).session(sessionId).user((String)null).clearDetails().assertEvent();
+        events.expect(EventType.INTROSPECT_TOKEN).client(clientId).session(sessionId).user(AssertEvents.isUUID()).clearDetails().assertEvent();
     }
 
     protected void doTokenRevoke(String refreshToken, String clientId, String clientSecret, String userId, String sessionId, boolean isOfflineAccess) throws IOException {
@@ -1586,6 +1586,21 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         AuthorizationEndpointResponse response = oauth.parseLoginResponse();
         assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
         assertEquals("Missing parameter: code_challenge_method", response.getErrorDescription());
+        events.expectClientPolicyError(EventType.LOGIN_ERROR, OAuthErrorException.INVALID_REQUEST,
+                Details.CLIENT_POLICY_ERROR, OAuthErrorException.INVALID_REQUEST,
+                "Missing parameter: code_challenge_method").client(clientId).user((String) null)
+                .assertEvent();
+    }
+
+    protected void failLoginByNotFollowingPKCEWithoutClientPolicyValidation(String clientId) {
+        oauth.client(clientId, TEST_CLIENT_SECRET);
+        oauth.openLoginForm();
+        AuthorizationEndpointResponse response = oauth.parseLoginResponse();
+        assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
+        assertEquals("Missing parameter: code_challenge_method", response.getErrorDescription());
+        events.expect(EventType.LOGIN_ERROR).error(OAuthErrorException.INVALID_REQUEST)
+                .detail(Details.REASON, "Missing parameter: code_challenge_method").client(clientId)
+                .user((String) null).assertEvent();
     }
 
     protected void failTokenRequestByNotFollowingPKCE(String clientId, String clientSecret) {
@@ -1612,6 +1627,9 @@ public abstract class AbstractClientPoliciesTest extends AbstractKeycloakTest {
         AuthorizationEndpointResponse response = oauth.parseLoginResponse();
         assertEquals(OAuthErrorException.INVALID_REQUEST, response.getError());
         assertEquals(errorDescription, response.getErrorDescription());
+        events.expectClientPolicyError(EventType.LOGIN_ERROR, OAuthErrorException.INVALID_REQUEST,
+                Details.CLIENT_POLICY_ERROR, OAuthErrorException.INVALID_REQUEST, errorDescription).client(clientId)
+                .user((String) null).assertEvent();
     }
 
     protected void failLoginWithoutNonce(String clientId) {

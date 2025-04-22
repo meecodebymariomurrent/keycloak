@@ -1,4 +1,5 @@
 import { createInstance } from "i18next";
+import type { i18n as i18nType } from "i18next";
 import FetchBackend from "i18next-fetch-backend";
 import { initReactI18next } from "react-i18next";
 
@@ -10,9 +11,10 @@ type KeyValue = { key: string; value: string };
 export const DEFAULT_LOCALE = "en";
 export const KEY_SEPARATOR = ".";
 
-export const i18n = createInstance({
+export const i18n: i18nType = createInstance({
   fallbackLng: DEFAULT_LOCALE,
   keySeparator: KEY_SEPARATOR,
+  nsSeparator: false,
   interpolation: {
     escapeValue: false,
   },

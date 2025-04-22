@@ -24,6 +24,7 @@ import org.keycloak.authorization.model.Resource;
 import org.keycloak.authorization.model.ResourceServer;
 import org.keycloak.authorization.model.Scope;
 import org.keycloak.authorization.permission.ResourcePermission;
+import org.keycloak.authorization.store.PolicyStore;
 import org.keycloak.authorization.store.ResourceStore;
 import org.keycloak.models.AdminRoles;
 import org.keycloak.models.ClientModel;
@@ -55,6 +56,7 @@ class RolePermissions implements RolePermissionEvaluator, RolePermissionManageme
     protected final AuthorizationProvider authz;
     protected final MgmtPermissions root;
     protected final ResourceStore resourceStore;
+    protected final PolicyStore policyStore;
     private static final String RESOURCE_NAME_PREFIX = "role.resource.";
 
     public RolePermissions(KeycloakSession session, RealmModel realm, AuthorizationProvider authz, MgmtPermissions root) {
@@ -64,8 +66,10 @@ class RolePermissions implements RolePermissionEvaluator, RolePermissionManageme
         this.root = root;
         if (authz != null) {
             resourceStore = authz.getStoreFactory().getResourceStore();
+            policyStore = authz.getStoreFactory().getPolicyStore();
         } else {
             resourceStore = null;
+            policyStore = null;
         }
     }
 
@@ -179,13 +183,15 @@ class RolePermissions implements RolePermissionEvaluator, RolePermissionManageme
                 } else if (role.getName().equals(AdminRoles.QUERY_GROUPS)) {
                     return true;
                 } else if (role.getName().equals(AdminRoles.MANAGE_AUTHORIZATION)) {
-                    if (!root.realm().canManageAuthorization()) {
+                    ResourceServer resourceServer = getResourceServer(role);
+                    if (!root.realm().canManageAuthorization(resourceServer)) {
                         return adminConflictMessage(role);
                     } else {
                         return true;
                     }
                 } else if (role.getName().equals(AdminRoles.VIEW_AUTHORIZATION)) {
-                    if (!root.realm().canViewAuthorization()) {
+                    ResourceServer resourceServer = getResourceServer(role);
+                    if (!root.realm().canViewAuthorization(resourceServer)) {
                         return adminConflictMessage(role);
                     } else {
                         return true;
@@ -540,7 +546,7 @@ class RolePermissions implements RolePermissionEvaluator, RolePermissionManageme
     }
 
     @Override
-    public Set<String> getRolesWithPermission(String scope) {
+    public Set<String> getRoleIdsByScope(String scope) {
         if (!root.isAdminSameRealm()) {
             return Collections.emptySet();
         }
@@ -653,5 +659,14 @@ class RolePermissions implements RolePermissionEvaluator, RolePermissionManageme
 
     private static String getRoleResourceName(RoleModel role) {
         return "role.resource." + role.getId();
+    }
+
+    private ResourceServer getResourceServer(RoleModel role) {
+        ResourceServer resourceServer = null;
+        if (role.isClientRole()) {
+            RoleContainerModel container = role.getContainer();
+            resourceServer = session.getProvider(AuthorizationProvider.class).getStoreFactory().getResourceServerStore().findById(container.getId());
+        }
+        return resourceServer;
     }
 }

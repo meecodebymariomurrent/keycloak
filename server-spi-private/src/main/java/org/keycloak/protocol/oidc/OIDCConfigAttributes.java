@@ -64,6 +64,7 @@ public final class OIDCConfigAttributes {
     public static final String PKCE_CODE_CHALLENGE_METHOD = "pkce.code.challenge.method";
 
     public static final String TOKEN_ENDPOINT_AUTH_SIGNING_ALG = "token.endpoint.auth.signing.alg";
+    public static final String TOKEN_ENDPOINT_AUTH_SIGNING_MAX_EXP = "token.endpoint.auth.signing.max.exp";
 
     public static final String BACKCHANNEL_LOGOUT_URL = "backchannel.logout.url";
 
@@ -76,6 +77,8 @@ public final class OIDCConfigAttributes {
     public static final String USE_REFRESH_TOKEN = "use.refresh.tokens";
 
     public static final String USE_LOWER_CASE_IN_TOKEN_RESPONSE = "token.response.type.bearer.lower-case";
+
+    public static final String USE_RFC9068_ACCESS_TOKEN_HEADER_TYPE = "access.token.header.type.rfc9068";
 
     public static final String ID_TOKEN_AS_DETACHED_SIGNATURE  = "id.token.as.detached.signature";
 

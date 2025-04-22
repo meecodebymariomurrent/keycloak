@@ -53,7 +53,7 @@ import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ManagedUser;
 
-@KeycloakIntegrationTest(config = KeycloakAdminPermissionsServerConfig.class)
+@KeycloakIntegrationTest
 public class UserResourceTypePermissionTest extends AbstractPermissionTest {
 
     @InjectUser(ref = "alice", lifecycle = LifeCycle.METHOD)
@@ -92,6 +92,8 @@ public class UserResourceTypePermissionTest extends AbstractPermissionTest {
         assertEquals(expected.getName(), permissionRep.getName());
         assertEquals(AdminPermissionsSchema.USERS.getScopes().size(), permission.scopes().size());
         assertEquals(3, permission.associatedPolicies().size());
+        assertEquals(1, permission.resources().size());
+        assertEquals(AdminPermissionsSchema.USERS_RESOURCE_TYPE, permission.resources().get(0).getDisplayName());
     }
 
     @Test
@@ -103,8 +105,10 @@ public class UserResourceTypePermissionTest extends AbstractPermissionTest {
         ScopePermissionResource permission = getScopePermissionsResource(client).findById(permissionRep.getId());
         assertEquals(expected.getName(), permissionRep.getName());
         assertEquals(AdminPermissionsSchema.USERS.getScopes().size(), permission.scopes().size());
-        assertEquals(1, permission.resources().size());
         assertEquals(3, permission.associatedPolicies().size());
+        assertEquals(1, permission.resources().size());
+        assertEquals(userAlice.getUsername(), permission.resources().get(0).getDisplayName());
+
     }
 
     @Test

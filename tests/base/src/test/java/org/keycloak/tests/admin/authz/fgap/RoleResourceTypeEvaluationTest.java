@@ -49,7 +49,7 @@ import static org.keycloak.authorization.AdminPermissionsSchema.MAP_ROLE_CLIENT_
 import static org.keycloak.authorization.AdminPermissionsSchema.MAP_ROLE_COMPOSITE;
 import static org.keycloak.authorization.AdminPermissionsSchema.VIEW;
 
-@KeycloakIntegrationTest(config = KeycloakAdminPermissionsServerConfig.class)
+@KeycloakIntegrationTest
 public class RoleResourceTypeEvaluationTest extends AbstractPermissionTest {
 
     @InjectAdminClient(mode = InjectAdminClient.Mode.MANAGED_REALM, client = "myclient", user = "myadmin")
@@ -71,7 +71,7 @@ public class RoleResourceTypeEvaluationTest extends AbstractPermissionTest {
 
         UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
         // we need to be able to list client scopes
-        createPermission(client, myclient.getId(), AdminPermissionsSchema.CLIENTS.getType(), Set.of(VIEW), onlyMyAdminUserPolicy);
+        createAllPermission(client, AdminPermissionsSchema.CLIENTS.getType(), onlyMyAdminUserPolicy, Set.of(VIEW));
 
         // create a client-scope
         ClientScopeRepresentation clientScope = new ClientScopeRepresentation();

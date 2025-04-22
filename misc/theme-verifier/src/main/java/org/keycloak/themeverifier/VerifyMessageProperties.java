@@ -38,6 +38,7 @@ public class VerifyMessageProperties {
 
     private final File file;
     private List<String> messages;
+    private boolean validateMessageFormatQuotes;
 
     public VerifyMessageProperties(File file) {
         this.file = file;
@@ -50,10 +51,97 @@ public class VerifyMessageProperties {
             verifyNoDuplicateKeys(contents);
             verifySafeHtml();
             verifyProblematicBlanks();
+            if (validateMessageFormatQuotes) {
+                verifyMessageFormatQuotes();
+                verifyMessageFormatPlaceholders();
+            } else {
+                verifyNotMessageFormatQuotes();
+                verifyNotMessageFormatPlaceholders();
+            }
         } catch (IOException e) {
             throw new MojoExecutionException("Can not read file " + file, e);
         }
         return messages;
+    }
+
+    private final static Pattern DOUBLE_SINGLE_QUOTES = Pattern.compile("''");
+
+    private void verifyNotMessageFormatQuotes() {
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
+
+        bundle.getKeys().asIterator().forEachRemaining(key -> {
+            String value = bundle.getString(key);
+
+            if (DOUBLE_SINGLE_QUOTES.matcher(value).find()) {
+                messages.add("Double single quotes are not allowed in message formats as they might be shown in frontends as-is in '" + key + "' for file " + file + ": " + value);
+            }
+
+        });
+    }
+
+    private static final Pattern SINGLE_QUOTE_MIDDLE = Pattern.compile("[^']'[^']");
+    private static final Pattern SINGLE_QUOTE_END = Pattern.compile("[^']'$");
+    private static final Pattern SINGLE_QUOTE_START = Pattern.compile("^'[^']");
+
+    private void verifyMessageFormatQuotes() {
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
+
+        bundle.getKeys().asIterator().forEachRemaining(key -> {
+            String value = bundle.getString(key);
+
+            if (SINGLE_QUOTE_START.matcher(value).find()
+            || SINGLE_QUOTE_MIDDLE.matcher(value).find()
+            || SINGLE_QUOTE_END.matcher(value).find()) {
+                messages.add("Single quotes are not allowed in message formats due to unexpected behaviors in '" + key + "' for file " + file + ": " + value);
+            }
+
+        });
+    }
+
+    private static final Pattern DOUBLE_CURLY_BRACES_START = Pattern.compile("\\{\\{[0-9]");
+    private static final Pattern DOUBLE_CURLY_BRACES_END = Pattern.compile("[0-9]}}");
+
+    private void verifyMessageFormatPlaceholders() {
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
+
+        bundle.getKeys().asIterator().forEachRemaining(key -> {
+            String value = bundle.getString(key);
+
+            if (DOUBLE_CURLY_BRACES_START.matcher(value).find()
+                    || DOUBLE_CURLY_BRACES_END.matcher(value).find()) {
+                messages.add("Double curly braces are not allowed in message formats in the backend for in '" + key + "' for file " + file + ": " + value);
+            }
+
+        });
+    }
+
+    private static final Pattern SINGLE_CURLY_BRACE_MIDDLE = Pattern.compile("[^{]\\{[0-9]");
+    private static final Pattern SINGLE_CURLY_BRACE_END = Pattern.compile("[0-9]}$");
+    private static final Pattern SINGLE_CURLY_BRACE_START = Pattern.compile("^\\{[0-9]");
+
+    private void verifyNotMessageFormatPlaceholders() {
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
+
+        bundle.getKeys().asIterator().forEachRemaining(key -> {
+            String value = bundle.getString(key);
+
+            if (SINGLE_CURLY_BRACE_START.matcher(value).find()
+                    || SINGLE_CURLY_BRACE_MIDDLE.matcher(value).find()
+                    || SINGLE_CURLY_BRACE_END.matcher(value).find()) {
+                messages.add("Single curly quotes are not supported as placeholders for the frontend in '" + key + "' for file " + file + ": " + value);
+            }
+
+        });
+    }
+
+    private PropertyResourceBundle getPropertyResourceBundle() {
+        PropertyResourceBundle bundle;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            bundle = new PropertyResourceBundle(fis);
+        } catch (IOException e) {
+            throw new RuntimeException("unable to read file " + file, e);
+        }
+        return bundle;
     }
 
     PolicyFactory POLICY_SOME_HTML = new org.owasp.html.HtmlPolicyBuilder()
@@ -64,12 +152,7 @@ public class VerifyMessageProperties {
     PolicyFactory POLICY_NO_HTML = new org.owasp.html.HtmlPolicyBuilder().toFactory();
 
     private void verifySafeHtml() {
-        PropertyResourceBundle bundle;
-        try (FileInputStream fis = new FileInputStream(file)) {
-            bundle = new PropertyResourceBundle(fis);
-        } catch (IOException e) {
-            throw new RuntimeException("unable to read file " + file, e);
-        }
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
 
         PropertyResourceBundle bundleEnglish;
         String englishFile = file.getAbsolutePath().replaceAll("resources-community", "resources")
@@ -124,18 +207,13 @@ public class VerifyMessageProperties {
             // Only check EN original files, as the other files are checked by the translation tools
             return;
         }
-        PropertyResourceBundle bundle;
-        try (FileInputStream fis = new FileInputStream(file)) {
-            bundle = new PropertyResourceBundle(fis);
-        } catch (IOException e) {
-            throw new RuntimeException("unable to read file " + file, e);
-        }
+        PropertyResourceBundle bundle = getPropertyResourceBundle();
 
         bundle.getKeys().asIterator().forEachRemaining(key -> {
             String value = bundle.getString(key);
 
             if (value.contains("  ")) {
-                messages.add("Duplicate blanks in " + key + " for file " + file + ": '" + value);
+                messages.add("Duplicate blanks in '" + key + "' for file " + file + ": '" + value);
             }
 
             if (value.startsWith(" ")) {
@@ -224,4 +302,10 @@ public class VerifyMessageProperties {
             messages.add("Duplicate keys in file '" + file.getAbsolutePath() + "': " + duplicateKeys);
         }
     }
+
+    public VerifyMessageProperties withValidateMessageFormatQuotes(boolean validateMessageFormatQuotes) {
+        this.validateMessageFormatQuotes = validateMessageFormatQuotes;
+        return this;
+    }
+
 }

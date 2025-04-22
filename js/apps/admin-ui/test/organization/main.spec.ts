@@ -50,6 +50,8 @@ test.describe("Organization CRUD", () => {
 
   test.describe("Existing organization", () => {
     const orgName = `org-edit-${uuid()}`;
+    const delOrgName = `org-del-${uuid()}`;
+    const delOrgName2 = `org-del-${uuid()}`;
 
     test.beforeAll(async () => {
       await adminClient.createOrganization({
@@ -57,14 +59,20 @@ test.describe("Organization CRUD", () => {
         name: orgName,
         domains: [{ name: orgName, verified: false }],
       });
+      await adminClient.createOrganization({
+        realm: realmName,
+        name: delOrgName,
+        domains: [{ name: delOrgName, verified: false }],
+      });
+      await adminClient.createOrganization({
+        realm: realmName,
+        name: delOrgName2,
+        domains: [{ name: delOrgName2, verified: false }],
+      });
     });
 
     test.afterAll(async () => {
       await adminClient.deleteOrganization(orgName, realmName);
-    });
-
-    test.beforeEach(async ({ page }) => {
-      await page.getByTestId("refresh").click();
     });
 
     test("should modify existing organization", async ({ page }) => {
@@ -79,7 +87,7 @@ test.describe("Organization CRUD", () => {
     });
 
     test("should delete from list", async ({ page }) => {
-      await clickRowKebabItem(page, orgName, "Delete");
+      await clickRowKebabItem(page, delOrgName, "Delete");
       await confirmModal(page);
       await assertNotificationMessage(
         page,
@@ -88,7 +96,7 @@ test.describe("Organization CRUD", () => {
     });
 
     test("should delete from details page", async ({ page }) => {
-      await clickTableRowItem(page, orgName);
+      await clickTableRowItem(page, delOrgName2);
       await selectActionToggleItem(page, "Delete");
       await confirmModal(page);
       await assertNotificationMessage(

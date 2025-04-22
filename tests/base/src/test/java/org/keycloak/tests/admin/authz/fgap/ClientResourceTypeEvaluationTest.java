@@ -23,7 +23,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.fail;
-import static org.keycloak.authorization.AdminPermissionsSchema.CONFIGURE;
+import static org.keycloak.authorization.AdminPermissionsSchema.CLIENTS;
 import static org.keycloak.authorization.AdminPermissionsSchema.MANAGE;
 import static org.keycloak.authorization.AdminPermissionsSchema.MAP_ROLES;
 import static org.keycloak.authorization.AdminPermissionsSchema.MAP_ROLES_COMPOSITE;
@@ -31,7 +31,9 @@ import static org.keycloak.authorization.AdminPermissionsSchema.VIEW;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.core.Response;
@@ -41,8 +43,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.ClientResource;
+import org.keycloak.admin.client.resource.ClientsResource;
 import org.keycloak.admin.client.resource.ScopePermissionsResource;
 import org.keycloak.authorization.AdminPermissionsSchema;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
@@ -53,10 +57,12 @@ import org.keycloak.representations.idm.authorization.ClientPolicyRepresentation
 import org.keycloak.representations.idm.authorization.ClientScopePolicyRepresentation;
 import org.keycloak.representations.idm.authorization.GroupPolicyRepresentation;
 import org.keycloak.representations.idm.authorization.JSPolicyRepresentation;
+import org.keycloak.representations.idm.authorization.Logic;
 import org.keycloak.representations.idm.authorization.PolicyRepresentation;
 import org.keycloak.representations.idm.authorization.RegexPolicyRepresentation;
 import org.keycloak.representations.idm.authorization.ResourcePermissionRepresentation;
 import org.keycloak.representations.idm.authorization.RolePolicyRepresentation;
+import org.keycloak.representations.idm.authorization.ScopePermissionRepresentation;
 import org.keycloak.representations.idm.authorization.TimePolicyRepresentation;
 import org.keycloak.representations.idm.authorization.UserPolicyRepresentation;
 import org.keycloak.testframework.annotations.InjectAdminClient;
@@ -64,7 +70,7 @@ import org.keycloak.testframework.annotations.InjectClient;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.realm.ManagedClient;
 
-@KeycloakIntegrationTest(config = KeycloakAdminPermissionsServerConfig.class)
+@KeycloakIntegrationTest
 public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
 
     @InjectAdminClient(mode = InjectAdminClient.Mode.MANAGED_REALM, client = "myclient", user = "myadmin")
@@ -153,7 +159,7 @@ public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
         }
 
         UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
-        createPermission(client, myclient.getId(), clientsType, Set.of(MANAGE), onlyMyAdminUserPolicy);
+        createPermission(client, myclient.getId(), clientsType, Set.of(VIEW, MANAGE), onlyMyAdminUserPolicy);
 
         // the caller can view myclient
         clientResource.toRepresentation();
@@ -189,64 +195,6 @@ public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
     }
 
     @Test
-    public void testConfigureOnlyOneClient() {
-        ClientRepresentation myclient = realm.admin().clients().findByClientId("myclient").get(0);
-        UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
-
-        ClientResource clientResource = realmAdminClient.realm(realm.getName()).clients().get(myclient.getId());
-
-        // the following operations should fail as the permission wasn't granted yet
-        try {
-            clientResource.toRepresentation();
-            fail("Expected exception wasn't thrown.");
-        } catch (Exception ex) {
-            assertThat(ex, instanceOf(ForbiddenException.class));
-        }
-        try {
-            clientResource.generateNewSecret();
-            fail("Expected exception wasn't thrown.");
-        } catch (Exception ex) {
-            assertThat(ex, instanceOf(ForbiddenException.class));
-        }
-        try {
-            clientResource.getDefaultClientScopes();
-            fail("Expected exception wasn't thrown.");
-        } catch (Exception ex) {
-            assertThat(ex, instanceOf(ForbiddenException.class));
-        }
-
-        UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
-        createPermission(client, myclient.getId(), clientsType, Set.of(CONFIGURE), onlyMyAdminUserPolicy);
-
-        // the caller can view myclient
-        clientResource.toRepresentation();
-
-        // can do operations with client secrets
-        clientResource.getSecret();
-        clientResource.generateNewSecret();
-        clientResource.invalidateRotatedSecret();
-
-        // can get default client scopes
-        List<ClientScopeRepresentation> defaultClientScopes = clientResource.getDefaultClientScopes();
-
-        // can't delete default client scopes
-        try {
-            clientResource.removeDefaultClientScope(defaultClientScopes.get(0).getId());
-            fail("Expected exception wasn't thrown.");
-        } catch (Exception ex) {
-            assertThat(ex, instanceOf(ForbiddenException.class));
-        }
-
-        // can't add default client scopes
-        try {
-            clientResource.addDefaultClientScope(defaultClientScopes.get(0).getId());
-            fail("Expected exception wasn't thrown.");
-        } catch (Exception ex) {
-            assertThat(ex, instanceOf(ForbiddenException.class));
-        }
-    }
-
-    @Test
     public void testManageAllClients() {
         UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
 
@@ -263,7 +211,7 @@ public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
         assertThat(found, empty());
 
         UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
-        createAllPermission(client, clientsType, onlyMyAdminUserPolicy, Set.of(MANAGE));
+        createAllPermission(client, clientsType, onlyMyAdminUserPolicy, Set.of(VIEW, MANAGE));
 
         // can create a new client
         realmAdminClient.realm(realm.getName()).clients().create(newClient).close();
@@ -323,22 +271,55 @@ public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
     }
 
     @Test
-    public void testMapRolesAndCompositesOnlyOneClient() {
+    public void testCreateClientsRequireManageScope() {
+        UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
+
+        ClientRepresentation newClient = new ClientRepresentation();
+
+        newClient.setClientId(KeycloakModelUtils.generateId());
+
+        // can't create a new client
+        try (Response response = realmAdminClient.realm(realm.getName()).clients().create(newClient)) {
+            Assertions.assertEquals(Status.FORBIDDEN.getStatusCode(), response.getStatus());
+        }
+
+        List<ClientRepresentation> found = realmAdminClient.realm(realm.getName()).clients().findAll(true);
+        assertThat(found, empty());
+
+
+        UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
+        ScopePermissionRepresentation allPermission = createAllPermission(client, clientsType, onlyMyAdminUserPolicy, CLIENTS.getScopes().stream().filter(Predicate.not(MANAGE::equals)).collect(Collectors.toSet()));
+
+        // can't create a new client
+        try (Response response = realmAdminClient.realm(realm.getName()).clients().create(newClient)) {
+            Assertions.assertEquals(Status.FORBIDDEN.getStatusCode(), response.getStatus());
+        }
+
+        // grants manage access
+        allPermission = getScopePermissionsResource(client).findByName(allPermission.getName());
+        allPermission.setScopes(Set.of(VIEW, MANAGE));
+        getScopePermissionsResource(client).findById(allPermission.getId()).update(allPermission);
+
+        // create clients is permission is granted to all clients
+        try (Response response = realmAdminClient.realm(realm.getName()).clients().create(newClient)) {
+            Assertions.assertEquals(Status.CREATED.getStatusCode(), response.getStatus());
+        }
+
+        found = realmAdminClient.realm(realm.getName()).clients().findByClientId(newClient.getClientId());
+        assertThat(found, not(empty()));
+    }
+
+    @Test
+    public void testMapRolesOnlyOneClient() {
         UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
         ClientRepresentation myclient = realm.admin().clients().findByClientId("myclient").get(0);
 
-        // create a role and sub-role
+        // create a role
         RoleRepresentation role = new RoleRepresentation();
         role.setName("myclient-role");
         role.setClientRole(true);
         realm.admin().clients().get(myclient.getId()).roles().create(role);
         role = realm.admin().clients().get(myclient.getId()).roles().get("myclient-role").toRepresentation();
-
-        RoleRepresentation subRole = new RoleRepresentation();
-        subRole.setName("myclient-subRole");
-        subRole.setClientRole(true);
-        realm.admin().clients().get(myclient.getId()).roles().create(subRole);
-        subRole = realm.admin().clients().get(myclient.getId()).roles().get("myclient-subRole").toRepresentation();
 
         // the following operations should fail as the permission wasn't granted yet
         try {
@@ -347,20 +328,123 @@ public class ClientResourceTypeEvaluationTest extends AbstractPermissionTest {
         } catch (Exception ex) {
             assertThat(ex, instanceOf(ForbiddenException.class));
         }
+
+        UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
+        createPermission(client, myadmin.getId(), AdminPermissionsSchema.USERS_RESOURCE_TYPE, Set.of(MAP_ROLES), onlyMyAdminUserPolicy);
+        createPermission(client, myclient.getId(), clientsType, Set.of(MAP_ROLES), onlyMyAdminUserPolicy);
+
+        // now those should pass
+        realmAdminClient.realm(realm.getName()).users().get(myadmin.getId()).roles().clientLevel(myclient.getId()).add(List.of(role));
+    }
+
+    @Test
+    public void testMapCompositesToAnotherClientRole() {
+        // to add a client role ('myclient') 'roleA' as a composite role of 'roleB' (client role of 'realmClient' client)
+        // it is required to have permission to manage the `realmClient` and to map-roles-composite of the `myclient`
+        UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
+        ClientRepresentation myclient = realm.admin().clients().findByClientId("myclient").get(0);
+
+        // create two roles, each for seprate client
+        RoleRepresentation roleA = new RoleRepresentation();
+        roleA.setName("roleA");
+        roleA.setClientRole(true);
+        realm.admin().clients().get(myclient.getId()).roles().create(roleA);
+        roleA = realm.admin().clients().get(myclient.getId()).roles().get("roleA").toRepresentation();
+
+        RoleRepresentation roleB = new RoleRepresentation();
+        roleB.setName("roleB");
+        roleB.setClientRole(true);
+        realm.admin().clients().get(realmClient.getId()).roles().create(roleB);
+
+        // the following operations should fail as the permission wasn't granted yet
         try {
-            realmAdminClient.realm(realm.getName()).clients().get(myclient.getId()).roles().get("myclient-role").addComposites(List.of(subRole));
+            realmAdminClient.realm(realm.getName()).clients().get(realmClient.getId()).roles().get("roleB").addComposites(List.of(roleA));
             fail("Expected exception wasn't thrown.");
         } catch (Exception ex) {
             assertThat(ex, instanceOf(ForbiddenException.class));
         }
 
         UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
-        createPermission(client, myadmin.getId(), AdminPermissionsSchema.USERS_RESOURCE_TYPE, Set.of(MAP_ROLES), onlyMyAdminUserPolicy);
-        createPermission(client, myclient.getId(), clientsType, Set.of(MAP_ROLES, MAP_ROLES_COMPOSITE, CONFIGURE), onlyMyAdminUserPolicy);
+
+        createPermission(client, myclient.getId(), clientsType, Set.of(MAP_ROLES_COMPOSITE), onlyMyAdminUserPolicy);
+
+        // the following operations should fail as the permission to manage the realmClient is missing
+        try {
+            realmAdminClient.realm(realm.getName()).clients().get(realmClient.getId()).roles().get("roleB").addComposites(List.of(roleA));
+            fail("Expected exception wasn't thrown.");
+        } catch (Exception ex) {
+            assertThat(ex, instanceOf(ForbiddenException.class));
+        }
+
+        createPermission(client, realmClient.getId(), clientsType, Set.of(MANAGE), onlyMyAdminUserPolicy);
 
         // now those should pass
-        realmAdminClient.realm(realm.getName()).users().get(myadmin.getId()).roles().clientLevel(myclient.getId()).add(List.of(role));
+        realmAdminClient.realm(realm.getName()).clients().get(realmClient.getId()).roles().get("roleB").addComposites(List.of(roleA));
+    }
 
-        realmAdminClient.realm(realm.getName()).clients().get(myclient.getId()).roles().get("myclient-role").addComposites(List.of(subRole));
+    @Test
+    public void testEvaluateAllResourcePermissionsForSpecificResourcePermission() {
+        ClientRepresentation myclient = realm.admin().clients().findByClientId("myclient").get(0);
+        UserRepresentation adminUser = realm.admin().users().search("myadmin").get(0);
+        UserPolicyRepresentation allowPolicy = createUserPolicy(realm, client, "Only My Admin", adminUser.getId());
+        ScopePermissionRepresentation allResourcesPermission = createAllPermission(client, clientsType, allowPolicy, Set.of(MANAGE, MAP_ROLES));
+        // all resource permissions grants manage scope
+        ClientsResource clients = realmAdminClient.realm(realm.getName()).clients();
+        clients.get(myclient.getId()).update(myclient);
+
+        ScopePermissionRepresentation resourcePermission = createPermission(client, myclient.getId(), clientsType, Set.of(MANAGE), allowPolicy);
+        // both all and specific resource permission grants manage scope
+        clients.get(myclient.getId()).update(myclient);
+
+        allResourcesPermission = getScopePermissionsResource(client).findByName(allResourcesPermission.getName());
+        allResourcesPermission.setScopes(Set.of(MAP_ROLES));
+        getScopePermissionsResource(client).findById(allResourcesPermission.getId()).update(allResourcesPermission);
+        // all resource permission does not have the manage scope but the scope is granted by the resource permission
+        clients.get(myclient.getId()).update(myclient);
+
+        resourcePermission = getScopePermissionsResource(client).findByName(resourcePermission.getName());
+        resourcePermission.setScopes(Set.of(MAP_ROLES));
+        getScopePermissionsResource(client).findById(resourcePermission.getId()).update(resourcePermission);
+        try {
+            // neither the all and specific resource permission grants access to the manage scope
+            clients.get(myclient.getId()).update(myclient);
+            Assertions.fail("Expected Exception wasn't thrown.");
+        } catch (ForbiddenException expected) {}
+
+        allResourcesPermission.setScopes(Set.of(MANAGE));
+        getScopePermissionsResource(client).findById(allResourcesPermission.getId()).update(allResourcesPermission);
+        // all resource permission grants access again to manage
+        clients.get(myclient.getId()).update(myclient);
+
+        UserPolicyRepresentation notAllowPolicy = createUserPolicy(Logic.NEGATIVE, realm, client, "Not My Admin", adminUser.getId());
+        createPermission(client, myclient.getId(), clientsType, Set.of(MANAGE), notAllowPolicy);
+        try {
+            // a specific resource permission that explicitly negates access to the manage scope denies access to the scope
+            clients.get(myclient.getId()).update(myclient);
+            Assertions.fail("Expected Exception wasn't thrown.");
+        } catch (ForbiddenException expected) {}
+
+        resourcePermission = getScopePermissionsResource(client).findByName(resourcePermission.getName());
+        resourcePermission.setScopes(Set.of(MAP_ROLES, MANAGE));
+        getScopePermissionsResource(client).findById(resourcePermission.getId()).update(resourcePermission);
+        try {
+            // the specific resource permission that explicitly negates access to the manage scope denies access to the scope
+            // even though there is another resource permission that grants access to the scope - conflict resolution denies by default
+            clients.get(myclient.getId()).update(myclient);
+            Assertions.fail("Expected Exception wasn't thrown.");
+        } catch (ForbiddenException expected) {}
+    }
+
+    @Test
+    public void testManageClientWithAuthorizationSettings() {
+        ClientRepresentation myResourceServer = realm.admin().clients().findByClientId("myresourceserver").get(0);
+        UserRepresentation myadmin = realm.admin().users().search("myadmin").get(0);
+        ClientResource clientResource = realmAdminClient.realm(realm.getName()).clients().get(myResourceServer.getId());
+        UserPolicyRepresentation onlyMyAdminUserPolicy = createUserPolicy(realm, client, "Only My Admin User Policy", myadmin.getId());
+        createPermission(client, myResourceServer.getId(), clientsType, Set.of(VIEW, MANAGE), onlyMyAdminUserPolicy);
+
+        // can update myResourceServer because manage also implies managing authorization service settings
+        myResourceServer.setName("somethingNew");
+        clientResource.update(myResourceServer);
     }
 }

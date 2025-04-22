@@ -66,8 +66,7 @@ public interface UserPermissionEvaluator {
      * Returns {@code true} if the caller has at least one of {@link AdminRoles#QUERY_USERS},
      * {@link AdminRoles#MANAGE_USERS} or {@link AdminRoles#VIEW_USERS} roles.
      * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} or
-     * {@link AdminPermissionsSchema#MANAGE} users.
+     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} users.
      */
     boolean canQuery();
 
@@ -85,8 +84,7 @@ public interface UserPermissionEvaluator {
      * Returns {@code true} if the caller has one of {@link AdminRoles#MANAGE_USERS} or
      * {@link AdminRoles#VIEW_USERS} roles.
      * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} or
-     * {@link AdminPermissionsSchema#MANAGE} users.
+     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} users.
      */
     boolean canView();
 
@@ -94,8 +92,7 @@ public interface UserPermissionEvaluator {
      * Returns {@code true} if the caller has at least one of {@link AdminRoles#MANAGE_USERS} or
      * {@link AdminRoles#VIEW_USERS} roles.
      * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} or
-     * {@link AdminPermissionsSchema#MANAGE} the user.
+     * Or if it has a permission to {@link AdminPermissionsSchema#VIEW} the user.
      * <p/>
      * Or if it has a permission to {@link AdminPermissionsSchema#VIEW_MEMBERS}
      * of the group chain the user is associated with.
@@ -129,6 +126,11 @@ public interface UserPermissionEvaluator {
     Map<String, Boolean> getAccess(UserModel user);
 
     /**
+     * Returns Map with information what access the caller for the provided user has when listing users.
+     */
+    Map<String, Boolean> getAccessForListing(UserModel user);
+
+    /**
      * Throws ForbiddenException if {@link #canMapRoles(UserModel)} returns {@code false}.
      */
     void requireMapRoles(UserModel user);
@@ -136,11 +138,7 @@ public interface UserPermissionEvaluator {
     /**
      * Returns {@code true} if the caller has {@link AdminRoles#MANAGE_USERS} role.
      * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#MANAGE} the user or 
-     * {@link AdminPermissionsSchema#MAP_ROLES} of the user.
-     * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#MANAGE_MEMBERS}
-     * of the group chain the user is associated with.
+     * Or if it has a permission to {@link AdminPermissionsSchema#MAP_ROLES} of the user.
      */
     boolean canMapRoles(UserModel user);
 
@@ -152,15 +150,12 @@ public interface UserPermissionEvaluator {
     /**
      * Returns {@code true} if the caller has {@link AdminRoles#MANAGE_USERS} role.
      * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#MANAGE} the user or 
-     * {@link AdminPermissionsSchema#MANAGE_GROUP_MEMBERSHIP} of the user.
-     * <p/>
-     * Or if it has a permission to {@link AdminPermissionsSchema#MANAGE_MEMBERS}
-     * of the group chain the user is associated with.
+     * Or if it has a permission to {@link AdminPermissionsSchema#MANAGE_GROUP_MEMBERSHIP} of the user.
      */
     boolean canManageGroupMembership(UserModel user);
 
     @Deprecated
     boolean isImpersonatable(UserModel user, ClientModel requester);
+    @Deprecated
     void grantIfNoPermission(boolean grantIfNoPermission);
 }

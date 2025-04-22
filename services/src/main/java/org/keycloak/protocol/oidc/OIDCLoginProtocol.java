@@ -292,6 +292,9 @@ public class OIDCLoginProtocol implements LoginProtocol {
             try {
                 session.clientPolicy().triggerOnEvent(new ImplicitHybridTokenResponse(authSession, clientSessionCtx, responseBuilder));
             } catch (ClientPolicyException cpe) {
+                event.detail(Details.REASON, Details.CLIENT_POLICY_ERROR);
+                event.detail(Details.CLIENT_POLICY_ERROR, cpe.getError());
+                event.detail(Details.CLIENT_POLICY_ERROR_DETAIL, cpe.getErrorDetail());
                 event.error(cpe.getError());
                 new AuthenticationSessionManager(session).removeTabIdInAuthenticationSession(realm, authSession);
                 redirectUri.addParam(OAuth2Constants.ERROR_DESCRIPTION, cpe.getError());
@@ -525,6 +528,9 @@ public class OIDCLoginProtocol implements LoginProtocol {
         if (userSession != null && authSession.getClientNote(Constants.KC_ACTION) != null) {
             String providerId = authSession.getClientNote(Constants.KC_ACTION);
             RequiredActionProvider requiredActionProvider = this.session.getProvider(RequiredActionProvider.class, providerId);
+            if (requiredActionProvider == null) {
+                return false;
+            }
             String authTime = userSession.getNote(AuthenticationManager.AUTH_TIME);
             int authTimeInt = authTime == null ? 0 : Integer.parseInt(authTime);
             int maxAgeInt = requiredActionProvider.getMaxAuthAge();

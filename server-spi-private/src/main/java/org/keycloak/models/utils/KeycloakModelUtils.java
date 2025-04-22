@@ -111,6 +111,8 @@ public final class KeycloakModelUtils {
     public static final String GROUP_PATH_ESCAPE = "~";
     private static final char CLIENT_ROLE_SEPARATOR = '.';
 
+    public static final int MAX_CLIENT_LOOKUPS_DURING_ROLE_RESOLVE = 25;
+
     private KeycloakModelUtils() {
     }
 
@@ -299,11 +301,14 @@ public final class KeycloakModelUtils {
     }
 
     /**
-     * Try to find user by username or email for authentication
+     * If "Login with email" is enabled and the given username contains '@',
+     * attempts to find the user by email for authentication.
      *
-     * @param realm    realm
-     * @param username username or email of user
-     * @return found user
+     * Otherwise, or if not found, attempts to find the user by username.
+     *
+     * @param realm the realm to search within
+     * @param username the username or email of the user
+     * @return the found user if present; otherwise, {@code null}
      */
     public static UserModel findUserByNameOrEmail(KeycloakSession session, RealmModel realm, String username) {
         if (realm.isLoginWithEmailAllowed() && username.indexOf('@') != -1) {
@@ -934,8 +939,10 @@ public final class KeycloakModelUtils {
         }
 
         // Check client roles for all possible splits by dot
+        int counter = 0;
         int scopeIndex = roleName.lastIndexOf(CLIENT_ROLE_SEPARATOR);
-        while (scopeIndex >= 0) {
+        while (scopeIndex >= 0 && counter < MAX_CLIENT_LOOKUPS_DURING_ROLE_RESOLVE) {
+            counter++;
             String appName = roleName.substring(0, scopeIndex);
             ClientModel client = realm.getClientByClientId(appName);
             if (client != null) {
@@ -944,6 +951,10 @@ public final class KeycloakModelUtils {
             }
 
             scopeIndex = roleName.lastIndexOf(CLIENT_ROLE_SEPARATOR, scopeIndex - 1);
+        }
+        if (counter >= MAX_CLIENT_LOOKUPS_DURING_ROLE_RESOLVE) {
+            logger.warnf("Not able to retrieve role model from the role name '%s'. Please use shorter role names with the limited amount of dots, roleName", roleName.length() > 100 ? roleName.substring(0, 100) + "..." : roleName);
+            return null;
         }
 
         // determine if roleName is a realm role

@@ -71,7 +71,9 @@ public interface ClientPermissionEvaluator {
     /**
      * Returns {@code true} if {@link #canView()} returns {@code true}.
      * <p/>
-     * Or if the caller has at least one of the {@link AdminRoles#QUERY_CLIENTS} or {@link AdminRoles#QUERY_USERS} roles.
+     * Or if the caller has at least one of the {@link AdminRoles#QUERY_CLIENTS} role.
+     * <p/>
+     * V1: or {@link AdminRoles#QUERY_USERS} roles.
      */
     boolean canList();
 
@@ -116,12 +118,14 @@ public interface ClientPermissionEvaluator {
      * <p/>
      * Or if the caller has a permission to {@link ClientPermissionManagement#CONFIGURE_SCOPE} the client.
      * <p/>
-     * For V2 only: Also if the caller has a permission to {@link org.keycloak.authorization.AdminPermissionsSchema#CONFIGURE} all clients.
+     * For V2 only: the call is redirected to {@code canManage(ClientModel)}.
      */
     boolean canConfigure(ClientModel client);
 
     /**
      * Throws ForbiddenException if {@link #canConfigure(ClientModel)} returns {@code false}.
+     * <p/>
+     * For V2 only: the call is redirected to {@code requireManage(ClientModel)}.
      */
     void requireConfigure(ClientModel client);
 
@@ -159,7 +163,7 @@ public interface ClientPermissionEvaluator {
     /**
      * Returns {@code true} if the caller has at least one of the {@link org.keycloak.models.AdminRoles#VIEW_CLIENTS} or {@link org.keycloak.models.AdminRoles#MANAGE_CLIENTS} roles.
      * <p/>
-     * For V2 only: Also if it has permission to {@link org.keycloak.authorization.AdminPermissionsSchema#VIEW} or {@link org.keycloak.authorization.AdminPermissionsSchema#MANAGE}.
+     * For V2 only: Also if it has permission to {@link org.keycloak.authorization.AdminPermissionsSchema#VIEW}.
      */
     boolean canView(ClientScopeModel clientScope);
 
@@ -191,5 +195,10 @@ public interface ClientPermissionEvaluator {
 
     Map<String, Boolean> getAccess(ClientModel client);
 
-    Set<String> getClientsWithPermission(String scope);
+    /**
+     * Returns the IDs of the clients that the current user can perform based on {@code scope}.
+     *
+     * @return Stream of IDs of clients with {@code scope} permission.
+     */
+    Set<String> getClientIdsByScope(String scope);
 }
